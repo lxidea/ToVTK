@@ -88,7 +88,8 @@ void RunFilesGrid(const JCfgRun *cfg){
   const int last=cfg->Last;
   int part=(onefile||cfg->First<0? 0: cfg->First);
   bool cont = cfg->Continue;
-  string file=dirin+JPartDataBi4::GetFileNamePart(part,0,0);
+  string file=fun::FileNameSec(cfg->SaveGrid,part);
+  file=fun::AddExtension(file,"vtk");
   while (cont && fun::FileExists(file)) {
     part++;
     file=fun::FileNameSec(cfg->SaveGrid,part);

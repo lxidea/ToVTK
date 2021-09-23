@@ -17,7 +17,7 @@ ifeq ($(USE_DEBUG), YES)
 else
   CCFLAGS=-c -O3
   ifeq ($(USE_FAST_MATH), YES)
-    CCFLAGS+= -ffast-math
+    CCFLAGS+= -ffast-math -fno-finite-math-only
   endif
   ifeq ($(USE_NATIVE_CPU_OPTIMIZATIONS), YES)
     CCFLAGS+= -march=native

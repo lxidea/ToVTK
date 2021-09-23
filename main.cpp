@@ -47,7 +47,7 @@ typedef struct
 {
     unsigned i,j,k,l,m,n,o,p;
 }conn;
-const unsigned maxlist = 150;
+const unsigned maxlist = 270;
 const char *APP_NAME="ToVtk v5.0.028 (03-09-2021)";
 
 //==============================================================================
@@ -67,7 +67,7 @@ void ExceptionText(string msg){
 
 void RunFilesGrid(const JCfgRun *cfg){
   const bool outtype=true,outmk=true,outpres=true;
-  const bool outdp=true;
+  const bool outdp=false;
 
   //-Reads XML file.
   JSpaceCtes* xmlctes=NULL;
@@ -172,6 +172,7 @@ void RunFilesGrid(const JCfgRun *cfg){
     double dp;
     tfloat3 minx={FLT_MAX,FLT_MAX,FLT_MAX};
     tfloat3 maxx={FLT_MIN,FLT_MIN,FLT_MIN};
+    tfloat3 posmin,posmax;
     for(unsigned cp=0;cp<npiece && cp<1;cp++){
       file=(onefile? JPartDataBi4::GetFileNameCase(casein,cp,npiece): dirin+JPartDataBi4::GetFileNamePart(part,cp,npiece));
       if(!cp)printf("load> %s\n",file.c_str());
@@ -179,6 +180,8 @@ void RunFilesGrid(const JCfgRun *cfg){
       if(onefile)pd.LoadFileCase("",casein,0,npiece);
       else pd.LoadFilePart(dirin,part,0,npiece);
       if(!cp)timestep=pd.Get_TimeStep();
+      posmin=ToTFloat3(pd.Get_MapPosMin());
+      posmax=ToTFloat3(pd.Get_MapPosMax());
       const bool possimple=pd.Get_PosSimple();
       const unsigned npok=pd.Get_Npok();
       const bool data2d=pd.Get_Data2d();
@@ -214,6 +217,10 @@ void RunFilesGrid(const JCfgRun *cfg){
           minx.x=std::min(minx.x,pos[i].x);
           minx.y=std::min(minx.y,pos[i].y);
           minx.z=std::min(minx.z,pos[i].z);
+        }
+        if(std::isinf(maxx.x) || std::isinf(maxx.y) || std::isinf(maxx.z) || std::isinf(minx.x) || std::isinf(minx.y) || std::isinf(minx.z)){
+          maxx = posmax;
+          minx = posmin;
         }
         //printf("domain dimensions:\nX:%f - %f\nY:%f - %f\nZ:%f - %f\n",minx.x,maxx.x,minx.y,maxx.y,minx.z,maxx.z);
         if(outdp){
@@ -366,10 +373,12 @@ void RunFilesGrid(const JCfgRun *cfg){
     int* ygcell = new int[ngnp];
     int* zgcell = new int[ngnp];
     int*celldata= new int[ngnp];
+    bool*cvalid = new bool[ngnp];
 
     for (auto i = 0; i < ngnp; i++)
     {
         xgcell[i] = ygcell[i] = zgcell[i] = celldata[i] = 0;
+        cvalid[i] = true;
     }
 
     for (int i = 1; i <= ngnp; i++)
@@ -377,7 +386,13 @@ void RunFilesGrid(const JCfgRun *cfg){
         const double xg = i<=np?pos[i-1].x:gpos[i-np-1].x;
         const double yg = i<=np?pos[i-1].y:gpos[i-np-1].y;
         const double zg = i<=np?pos[i-1].z:gpos[i-np-1].z;
+        cvalid[i-1] = !(std::isinf(xg) || std::isinf(yg) || std::isinf(zg) ||
+                std::isnan(xg) || std::isnan(yg) || std::isnan(zg));
         
+        if (xg>posmax.x || xg<posmin.x || yg>posmax.y || yg<posmin.y || zg>posmax.z || zg<posmin.z) cvalid[i-1]=false;
+
+        if (!cvalid[i-1]) continue;
+
         const int xxcell = int((xg - minxx) / hh + 1.0);
         const int yycell = int((yg - minyy) / hh + 1.0);
         const int zzcell = int((zg - minzz) / hh + 1.0);
@@ -396,7 +411,7 @@ void RunFilesGrid(const JCfgRun *cfg){
     unsigned int** list = neiblist;
     unsigned short* nnum = neibNum;
 
-    #pragma omp parallel for reduction(+:irun) shared(starttime,np,gnp) schedule(dynamic) firstprivate(list,nnum)
+    #pragma omp parallel for reduction(+:irun) shared(starttime,np,gnp) schedule(dynamic) firstprivate(list,nnum,cvalid)
     for (int i = 1; i <= np; i++)
     {
         #pragma omp atomic
@@ -410,6 +425,8 @@ void RunFilesGrid(const JCfgRun *cfg){
             int perc = (int)(((double)irun) / np * 100.0 );
             std::cout << "\rworking at " << irun << "/" << np << " - " << perc << "%" << std::flush;
         }
+
+        if (!cvalid[i-1]) continue;
 
         int minxcell = 1;
         int maxxcell = 1;
@@ -499,7 +516,7 @@ void RunFilesGrid(const JCfgRun *cfg){
         delete[] grid[i];
     }
     delete[] grid;
-    delete[] xgcell,ygcell,zgcell,celldata;
+    delete[] xgcell,ygcell,zgcell,celldata,cvalid;
 
     unsigned total = 0;
     unsigned short mlen = 0;

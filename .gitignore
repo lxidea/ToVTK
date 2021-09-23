@@ -4,3 +4,4 @@ round-test.cpp
 test.vtk
 vtk_test.cpp
 .vscode
+*.o
